@@ -1,5 +1,6 @@
 <script lang="ts">
   import toast, { Toaster } from "svelte-5-french-toast";
+    import MatrizDecision from "./MatrizDecision.svelte";
 
   let resultReady = $state(false)
   let ranking: { nombre: string, puntaje: number }[] = $state([])
@@ -194,8 +195,10 @@
     </ol>
 
     <button type="submit" class="btn_send">Enviar</button>
+
   </section>
 </form>
+<MatrizDecision/>
 
 {#if resultReady} 
 <section class="results">

@@ -20,8 +20,8 @@
   .app_layout {
     display: flex;
     flex-direction: column;
-    /* width: 50rem; */
-    /* gap: .5rem; */
+    /* max-width: 80rem; */
+    gap: .5rem;
     justify-content: center;
   }
 </style>
