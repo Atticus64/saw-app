@@ -137,7 +137,7 @@
     }
 
     // const API = "http://localhost:3000/api";
-    const API = "https://washing-unlisted-shirt.ngrok-free.dev/api";
+    const API = "https://saw-service.onrender.com/api/";
     const response = fetch(`${API}/evaluar-editores`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
