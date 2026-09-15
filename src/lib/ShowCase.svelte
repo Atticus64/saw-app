@@ -4,7 +4,7 @@
     const alternativas = [
         {
             nombre: "Neovim",
-            descripcion: "Editor personalizable para la terminal",
+            descripcion: "Editor rápido y personalizable para la terminal",
             imagen: "https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/neovim/neovim-original.svg"
         },
         {
@@ -58,10 +58,17 @@
 
 <style>
     .showcase_layout {
-        width: 35rem;
         display: grid;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        max-width: 100%;
+        gap: 1rem;
+    }
 
-        grid-template-columns: 1fr auto;
-        align-items: center;
+    @media (min-width: 1025px) {
+        .showcase_layout {
+            grid-template-columns: 1fr auto;
+            gap: 0;
+        }
     }
 </style>
