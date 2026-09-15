@@ -138,7 +138,7 @@
 
     // const API = "http://localhost:3000/api";
     const API = "https://saw-service.onrender.com/api";
-    const response = fetch(`${API}/evaluar-editores`, {
+    const response = fetch("https://saw-service.onrender.com/api/evaluar-editores", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
