@@ -1,20 +1,25 @@
 <script lang="ts">
   import toast, { Toaster } from "svelte-5-french-toast";
     import MatrizDecision from "./MatrizDecision.svelte";
+    import { evaluateEditorsSaw, evaluateEditorsTopsis } from "../api/service";
+    import SawResult from "./SawResult.svelte";
+    import TopsisResult from "./TopsisResult.svelte";
+    import Comparative from "./Comparative.svelte";
+    import type { EditorSaw, SawResponse, TopsisDatos, TopsisResponse } from "../api/types";
 
   let resultReady = $state(false)
-  let ranking: { nombre: string, puntaje: number }[] = $state([])
-  let datos_normalizados: {
-    nombre: string;
-    puntaje: number;
-    valoresNormalizados: number[];
-  }[] = $state([])
+  let tipo_metodo: "saw" | "topsis" | "comparativo" = $state("saw")
+  let ranking: EditorSaw[] = $state([])
+  let datos_normalizados: EditorSaw[] = $state([])
+  let topsisDatos: TopsisDatos | null = $state(null)
+  let sawResponse: SawResponse | null = $state(null)
+  let topsisResponse: TopsisResponse | null = $state(null)
 
   const criterios = [
     {
       nombre: "Tiempo de inicio",
       id: "inicio",
-      valorInicial: 10,
+      valorInicial: 15,
       optimizacion: "Minimizar",
       medida: "ms",
       valorMin: 1,
@@ -23,7 +28,7 @@
     {
       nombre: "Consumo de Ram",
       id: "ram",
-      valorInicial: 10,
+      valorInicial: 20,
       optimizacion: "Minimizar",
       medida: "MB",
       valorMin: 1,
@@ -41,7 +46,7 @@
     {
       nombre: "Extensiones",
       id: "extensiones",
-      valorInicial: 10,
+      valorInicial: 20,
       optimizacion: "Maximizar",
       medida: "1-10",
       valorMin: 1,
@@ -50,7 +55,7 @@
     {
       nombre: "Integración con Terminal",
       id: "terminal",
-      valorInicial: 80,
+      valorInicial: 20,
       optimizacion: "Maximizar",
       medida: "1-10",
       valorMin: 1,
@@ -59,13 +64,15 @@
     {
       nombre: "Autocompletado",
       id: "autocompletado",
-      valorInicial: 10,
+      valorInicial: 15,
       optimizacion: "Maximizar",
       medida: "1-10",
       valorMin: 1,
       valorMax: 10,
     },
   ];
+
+  const criteriosNombres = criterios.map(c => c.nombre);
 
   type Criteria = {
     inicio?: number;
@@ -103,6 +110,58 @@
     return validacion;
   }
 
+  function evaluarPorSaw(pesos: number[], tipos: string[]) {
+    evaluateEditorsSaw(pesos, tipos)
+      .then((result: SawResponse) => {
+        ranking = result.ranking
+        datos_normalizados = result.tablaNormalizada
+        resultReady = true
+        toast.success(`Se enviaron los datos con éxito!`);
+      })
+      .catch((err) => {
+        console.error(err);
+        resultReady = false;
+        ranking = [];
+        datos_normalizados = [];
+        toast.error(err?.message ?? "Error al evaluar SAW");
+      });
+  }
+
+  function evaluarPorTopsis(pesos: number[], tipos: string[]) {
+    evaluateEditorsTopsis(pesos, tipos)
+      .then((result: TopsisResponse) => {
+        topsisDatos = result.datos
+        resultReady = true
+        toast.success(`Se enviaron los datos con éxito!`);
+      })
+      .catch((err) => {
+        console.error(err);
+        resultReady = false;
+        topsisDatos = null;
+        toast.error(err?.message ?? "Error al evaluar TOPSIS");
+      });
+  }
+
+  function evaluarComparativo(pesos: number[], tipos: string[]) {
+    Promise.all([
+      evaluateEditorsSaw(pesos, tipos),
+      evaluateEditorsTopsis(pesos, tipos),
+    ])
+      .then(([saw, topsis]: [SawResponse, TopsisResponse]) => {
+        sawResponse = saw
+        topsisResponse = topsis
+        resultReady = true
+        toast.success(`Se enviaron los datos con éxito!`);
+      })
+      .catch((err) => {
+        console.error(err);
+        resultReady = false;
+        sawResponse = null;
+        topsisResponse = null;
+        toast.error(err?.message ?? "Error al evaluar comparativo");
+      });
+  }
+
   function sendData(
     e: SubmitEvent & {
       currentTarget: EventTarget & HTMLFormElement;
@@ -114,21 +173,19 @@
     const rawValues = Object.fromEntries(
       new FormData(e.target as HTMLFormElement),
     );
-    let data: Criteria = {};
+
+    tipo_metodo = rawValues.tipo_metodo as "saw" | "topsis" | "comparativo";
     const pesos: number[] = [];
     const tipos: string[] = [];
+    const data: Criteria = {};
 
-    for (const [key, value] of Object.entries(rawValues)) {
-      if (isNaN(Number(value))) {
-        tipos.push(value as string);
-        continue;
-      }
-      data[key as keyof Criteria] = Number(value);
-      pesos.push(Number(value));
+    for (const criterio of criterios) {
+      const peso = Number(rawValues[criterio.id]);
+      const optimizacion = rawValues[criterio.id + "-opt"] as string;
+      data[criterio.id as keyof Criteria] = peso;
+      pesos.push(peso);
+      tipos.push(optimizacion);
     }
-
-    console.log(pesos);
-    console.log(tipos);
 
     const { ok, msg, valor } = validarCriterios(data);
     if (!ok) {
@@ -137,29 +194,17 @@
       return;
     }
 
-    // const API = "http://localhost:3000/api";
-    const API = "https://saw-service.onrender.com/api";
-    const response = fetch("https://saw-service.onrender.com/api/evaluar-editores", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        pesos,
-        tipos,
-      }),
-    });
-
-    response
-      .then(async (r) => {
-        const json = await r.json();
-        console.log(json);
-        ranking = json["ranking"]
-        datos_normalizados = json["tablaNormalizada"]
-        resultReady = true
-      })
-      .catch(console.log)
-      .finally();
-
-    toast.success(`Se enviaron los datos con éxito!`);
+    switch(tipo_metodo) {
+      case "saw":
+        evaluarPorSaw(pesos, tipos)
+        break;
+      case "topsis":
+        evaluarPorTopsis(pesos, tipos)
+        break;
+      case "comparativo":
+        evaluarComparativo(pesos, tipos)
+        break;
+    }
   }
 </script>
 
@@ -184,68 +229,41 @@
               value={criterio.valorInicial}
             />
             <span class="percent">%</span>
-            <label for="">Optimización</label>
-            <select id={criterio.id + "-optid"} name={criterio.id + "-opt"}>
-              <option value="min">Minimizar</option>
-              <option value="max">Maximizar</option>
+            <label for={criterio.id + "-opt"}>Optimización</label>
+            <select id={criterio.id + "-opt"} name={criterio.id + "-opt"}>
+              <option value="min" selected={criterio.optimizacion === "Minimizar"}>Minimizar</option>
+              <option value="max" selected={criterio.optimizacion === "Maximizar"}>Maximizar</option>
             </select>
           </span>
         </li>
       {/each}
     </ol>
 
-    <button type="submit" class="btn_send">Enviar</button>
+    <div class="buttons">
+        <button type="submit" class="btn_send">Enviar</button>
+        <select name="tipo_metodo" id="">
+            <option value="saw">Saw</option>
+            <option value="topsis">Topsis</option>
+            <option value="comparativo">Comparativo</option>
+        </select>
+
+    </div>
 
   </section>
 </form>
 <MatrizDecision/>
 
-{#if resultReady} 
+{#if resultReady}
 <section class="results">
-  <div class="table-scroll">
-    <table class="normalizada">
-      <thead>
-        <tr>
-          <td>Nombre</td>
-          {#each criterios as criterio}
-            <td>{criterio.nombre}</td>
-          {/each}
-        </tr>
-      </thead>
-      <tbody>
-        {#each datos_normalizados as editor}
-          <tr>
-            <td>{editor.nombre}</td>
-            {#each editor.valoresNormalizados as valor}
-              <td>{valor}</td>
-            {/each}
-          </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-</section>
-<section class="results">
-  <div class="table-scroll">
-    <table>
-      <thead>
-        <tr>
-          <td>Nombre</td>
-          <td> Puntaje</td>
-        </tr>
-      </thead>
-      <tbody>
-        {#each ranking as puesto}
-        <tr>
-          <td>{puesto.nombre}</td>
-          <td>{puesto.puntaje}</td>
-        </tr>
-        {/each}
-      </tbody>
-    </table>
-  </div>
-</section>
 
+    {#if tipo_metodo === "saw"}
+        <SawResult criterios={criteriosNombres} ranking={ranking} datos_normalizados={datos_normalizados}></SawResult>
+    {:else if tipo_metodo === "topsis" && topsisDatos}
+        <TopsisResult criterios={criteriosNombres} datos={topsisDatos}></TopsisResult>
+    {:else if tipo_metodo === "comparativo" && sawResponse && topsisResponse}
+        <Comparative criterios={criteriosNombres} saw={sawResponse} topsis={topsisResponse}></Comparative>
+    {/if}
+</section>
 {/if}
 
 
@@ -255,6 +273,13 @@
     margin: 0;
     padding: 0;
     width: 100%;
+  }
+
+  .buttons {
+    display: flex;
+    flex-direction: row;
+    gap: 1rem;
+    align-items: center;
   }
 
   .params {
@@ -394,49 +419,4 @@
     width: 100%;
   }
 
-  .table-scroll {
-    width: 100%;
-    max-width: 100%;
-    overflow-x: auto;
-  }
-
-  table {
-    margin: 0 auto 2rem;
-    border-collapse: collapse;
-    background: var(--color-surface);
-    border: var(--border-width) solid var(--color-border-strong);
-    color: var(--color-text-heading);
-    font-size: 0.95rem;
-  }
-
-  table thead td {
-    font-family: var(--font-display);
-    font-size: 0.65rem;
-    letter-spacing: 1px;
-    text-transform: uppercase;
-    padding: 0.6rem 1.25rem;
-    border-bottom: var(--border-width) solid var(--color-border);
-    color: var(--color-accent);
-  }
-
-  table tbody td {
-    padding: 0.5rem 1.25rem;
-    border-bottom: 1px solid var(--color-border);
-  }
-
-  table tbody tr:last-child td {
-    border-bottom: none;
-  }
-
-  table tbody tr:hover td {
-    background: var(--color-accent-bg);
-  }
-
-  table.normalizada thead td {
-    color: var(--oo-crystal);
-  }
-
-  table.normalizada tbody tr:hover td {
-    background: rgba(159, 192, 216, 0.12);
-  }
 </style>

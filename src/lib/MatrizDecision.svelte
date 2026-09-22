@@ -1,11 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
-
-  type Editor = {
-    id: string;
-    nombre: string;
-    valores: number[];
-  };
+  import { getDecisionMatrix, status } from "../api/service";
+  import type { Editor } from "../api/types";
 
   const criterios = [
     "Tiempo de inicio",
@@ -17,34 +13,31 @@
   ];
 
   let datos: Editor[] = $state([]);
-  let estado: "cargando" | "ok" | "error" = $state("cargando");
+  let estado = $state(status.loading);
 
   onMount(async () => {
-    try {
-      const res = await fetch(
-        "https://saw-service.onrender.com/api/matriz-decision",
-      );
-      datos = await res.json();
-      estado = "ok";
-    } catch {
-      estado = "error";
-    }
+    const result = await getDecisionMatrix();
+
+    datos = result.datos
+    estado = result.estado
+
   });
 </script>
 
-{#if estado === "cargando"}
+{#if estado === status.loading}
   <p class="msg">Cargando matriz de decisión…</p>
-{:else if estado === "error"}
+{:else if estado === status.error}
   <p class="msg">Error al cargar la matriz de decisión</p>
 {:else}
+  <h4>Matriz de Decisión</h4>
   <section class="table-scroll">
     <table class="matriz">
       <thead>
         <tr>
-          <td>ID</td>
-          <td>Nombre</td>
+          <th>ID</th>
+          <th>Nombre</th>
           {#each criterios as criterio}
-            <td>{criterio}</td>
+            <th>{criterio}</th>
           {/each}
         </tr>
       </thead>
@@ -86,7 +79,7 @@
     font-size: 0.95rem;
   }
 
-  table.matriz thead td {
+  table.matriz thead th {
     font-family: var(--font-display);
     font-size: 0.65rem;
     letter-spacing: 1px;
