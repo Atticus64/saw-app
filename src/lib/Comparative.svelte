@@ -12,6 +12,10 @@
   let { criterios, saw, topsis }: Props = $props();
 
   const chartConfig = $derived(comparativeBarConfig(saw, topsis));
+
+  const topsisByNombre = $derived(
+    new Map(topsis.datos.rankingFinal.map((r) => [r.nombre, r.puntajeFinal])),
+  );
 </script>
 
 <section class="perspective p-saw" aria-label="Perspectiva SAW">
@@ -145,6 +149,30 @@
             <td>{detalle.distanciaPositiva}</td>
             <td>{detalle.distanciaNegativa}</td>
             <td>{detalle.puntajeFinal}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section class="results">
+  <h3>Comparativa de puntajes SAW vs TOPSIS</h3>
+  <div class="table-scroll">
+    <table>
+      <thead>
+        <tr>
+          <th>Nombre</th>
+          <th>SAW</th>
+          <th>TOPSIS</th>
+        </tr>
+      </thead>
+      <tbody>
+        {#each saw.ranking as editor}
+          <tr>
+            <td>{editor.nombre}</td>
+            <td>{editor.puntaje.toFixed(3)}</td>
+            <td>{topsisByNombre.get(editor.nombre)?.toFixed(3)}</td>
           </tr>
         {/each}
       </tbody>
